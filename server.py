@@ -26,7 +26,13 @@ def load_env():
         'GOOGLE_CLIENT_ID': '',
         'GOOGLE_CLIENT_SECRET': '',
         'GITHUB_CLIENT_ID': '',
-        'GITHUB_CLIENT_SECRET': ''
+        'GITHUB_CLIENT_SECRET': '',
+        'RESEND_API_KEY': '',
+        'SMTP_HOST': 'smtp.gmail.com',
+        'SMTP_PORT': '465',
+        'SMTP_USER': '',
+        'SMTP_PASSWORD': '',
+        'SMTP_EMAIL': ''
     }
     # Load .env relative to server.py
     env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -58,6 +64,13 @@ GOOGLE_CLIENT_ID = ENV['GOOGLE_CLIENT_ID']
 GOOGLE_CLIENT_SECRET = ENV['GOOGLE_CLIENT_SECRET']
 GITHUB_CLIENT_ID = ENV['GITHUB_CLIENT_ID']
 GITHUB_CLIENT_SECRET = ENV['GITHUB_CLIENT_SECRET']
+
+RESEND_API_KEY = ENV['RESEND_API_KEY']
+SMTP_HOST = ENV['SMTP_HOST']
+SMTP_PORT = ENV['SMTP_PORT']
+SMTP_USER = ENV['SMTP_USER']
+SMTP_PASSWORD = ENV['SMTP_PASSWORD']
+SMTP_EMAIL = ENV['SMTP_EMAIL']
 
 # 2. Database Connection Helpers
 def get_db_connection():
@@ -162,6 +175,17 @@ def init_db():
         )
     ''')
     
+    # Create otp_codes table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS otp_codes (
+            email VARCHAR(255) NOT NULL,
+            code_hash VARCHAR(255) NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            expires_at VARCHAR(255) NOT NULL,
+            PRIMARY KEY (email, type)
+        )
+    ''')
+    
     cursor.close()
     conn.close()
     print("ApexBudget // MySQL Database and schemas initialized successfully.")
@@ -181,6 +205,98 @@ def verify_password(stored_password, provided_password):
         return pwdhash.hex() == stored_hash
     except Exception:
         return False
+
+def email_send_otp(email, code, type_str):
+    subject_map = {
+        'signup': 'Verify your email - ApexBudget',
+        'login': 'Your One-Time Password (OTP) - ApexBudget',
+        'reset': 'Reset your password - ApexBudget'
+    }
+    action_map = {
+        'signup': 'create your account',
+        'login': 'log in to your account',
+        'reset': 'reset your password'
+    }
+    
+    subject = subject_map.get(type_str, 'Verification Code - ApexBudget')
+    action = action_map.get(type_str, 'verify your session')
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e1e8ed; border-radius: 8px;">
+        <h2 style="color: #4f46e5; margin-bottom: 24px; text-align: center;">ApexBudget Verification</h2>
+        <p>Hello,</p>
+        <p>You requested a One-Time Password (OTP) to {action}. Use the following 6-digit code to complete the verification:</p>
+        <div style="background-color: #f3f4f6; padding: 16px; font-size: 32px; font-weight: bold; text-align: center; letter-spacing: 6px; color: #111827; border-radius: 6px; margin: 24px 0;">
+            {code}
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">This code is valid for <strong>5 minutes</strong>. If you did not make this request, you can safely ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+        <p style="color: #9ca3af; font-size: 12px; text-align: center;">ApexBudget // Modern Student Expense Tracker</p>
+    </div>
+    """
+    
+    # 1. Try Resend API
+    if RESEND_API_KEY:
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        from_email = SMTP_EMAIL if SMTP_EMAIL else "onboarding@resend.dev"
+        payload = json.dumps({
+            "from": from_email,
+            "to": email,
+            "subject": subject,
+            "html": html_content
+        }).encode('utf-8')
+        
+        try:
+            req = urllib.request.Request(url, data=payload, headers=headers, method='POST')
+            with urllib.request.urlopen(req) as response:
+                res = json.loads(response.read().decode('utf-8'))
+                print(f"ApexBudget // Sent OTP via Resend. Result: {res}")
+                return True
+        except Exception as e:
+            print(f"Warning: Failed to send OTP via Resend: {e}")
+            
+    # 2. Try SMTP
+    if SMTP_USER and SMTP_PASSWORD:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = SMTP_EMAIL if SMTP_EMAIL else SMTP_USER
+        msg['To'] = email
+        
+        part = MIMEText(html_content, 'html')
+        msg.attach(part)
+        
+        try:
+            port = int(SMTP_PORT) if SMTP_PORT else 465
+            if port == 465:
+                with smtplib.SMTP_SSL(SMTP_HOST, port) as server:
+                    server.login(SMTP_USER, SMTP_PASSWORD)
+                    server.sendmail(msg['From'], [email], msg.as_string())
+            else:
+                with smtplib.SMTP(SMTP_HOST, port) as server:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASSWORD)
+                    server.sendmail(msg['From'], [email], msg.as_string())
+            print(f"ApexBudget // Sent OTP via SMTP ({SMTP_HOST}) to {email}")
+            return True
+        except Exception as e:
+            print(f"Warning: Failed to send OTP via SMTP: {e}")
+            
+    # 3. Console fallback
+    print(f"\n==========================================")
+    print(f"  APEXBUDGET OTP FALLBACK LOG")
+    print(f"  To: {email}")
+    print(f"  Type: {type_str}")
+    print(f"  OTP Code: {code}")
+    print(f"==========================================\n")
+    return False
 
 # 4. HTTP Server Handler
 class AppRequestHandler(http.server.BaseHTTPRequestHandler):
@@ -480,8 +596,186 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return self.respond_error(400, "Bad Request: Invalid JSON payload.")
 
-        # 1. API Route: User Signup
-        if self.path == '/api/auth/signup':
+        # 1. API Route: Send OTP
+        if self.path == '/api/auth/otp/send':
+            email = body.get('email', '').strip().lower()
+            type_val = body.get('type', '').strip() # 'signup', 'login', 'reset'
+            password = body.get('password', '') # only needed if type is 'login'
+            
+            if not email or not type_val:
+                return self.respond_error(400, "Bad Request: Email and Type are required.")
+                
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Check user existence
+            cursor.execute("SELECT email, password_hash FROM users WHERE email = %s", (email,))
+            user = cursor.fetchone()
+            
+            if type_val == 'signup':
+                if user:
+                    cursor.close()
+                    conn.close()
+                    return self.respond_error(400, "An account with this email already exists.")
+            elif type_val in ('login', 'reset'):
+                if not user:
+                    cursor.close()
+                    conn.close()
+                    return self.respond_error(400, "No account found with this email.")
+                
+                # For login type, verify password before sending OTP
+                if type_val == 'login':
+                    if not verify_password(user['password_hash'], password):
+                        cursor.close()
+                        conn.close()
+                        return self.respond_error(401, "Invalid email or password.")
+            
+            # Generate 6-digit OTP
+            otp_code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+            otp_hash = hash_password(otp_code)
+            expiry = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+            
+            # Save OTP to database (replace if exists)
+            cursor.execute("DELETE FROM otp_codes WHERE email = %s AND type = %s", (email, type_val))
+            cursor.execute(
+                "INSERT INTO otp_codes (email, code_hash, type, expires_at) VALUES (%s, %s, %s, %s)",
+                (email, otp_hash, type_val, expiry)
+            )
+            cursor.close()
+            conn.close()
+            
+            # Send email
+            sent_email = email_send_otp(email, otp_code, type_val)
+            
+            # Return response
+            res_data = {"success": True, "message": "Verification code sent."}
+            
+            # Safely expose fallback OTP ONLY for local testing (localhost / 127.0.0.1) when email failed
+            host = self.headers.get('Host', '')
+            is_local = 'localhost' in host or '127.0.0.1' in host
+            if not sent_email and is_local:
+                res_data["otp_fallback"] = otp_code
+                
+            return self.respond_json(200, res_data)
+
+        # 2. API Route: Verify OTP
+        elif self.path == '/api/auth/otp/verify':
+            email = body.get('email', '').strip().lower()
+            code = body.get('code', '').strip()
+            type_val = body.get('type', '').strip() # 'signup', 'login', 'reset'
+            
+            if not email or not code or not type_val:
+                return self.respond_error(400, "Bad Request: Email, Code, and Type are required.")
+                
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Fetch OTP code
+            cursor.execute("SELECT code_hash, expires_at FROM otp_codes WHERE email = %s AND type = %s", (email, type_val))
+            otp = cursor.fetchone()
+            
+            if not otp:
+                cursor.close()
+                conn.close()
+                return self.respond_error(400, "Invalid or expired verification code.")
+                
+            # Check expiry
+            now = datetime.utcnow().isoformat()
+            if otp['expires_at'] < now:
+                cursor.execute("DELETE FROM otp_codes WHERE email = %s AND type = %s", (email, type_val))
+                cursor.close()
+                conn.close()
+                return self.respond_error(400, "Verification code has expired.")
+                
+            # Verify code hash
+            if not verify_password(otp['code_hash'], code):
+                cursor.close()
+                conn.close()
+                return self.respond_error(400, "Invalid verification code.")
+                
+            # OTP is valid! Delete it immediately
+            cursor.execute("DELETE FROM otp_codes WHERE email = %s AND type = %s", (email, type_val))
+            
+            # Perform action based on type
+            if type_val == 'signup':
+                name = body.get('name', '').strip()
+                password = body.get('password', '')
+                country = body.get('country', 'US').strip()
+                
+                if not name or not password:
+                    cursor.close()
+                    conn.close()
+                    return self.respond_error(400, "Bad Request: Name and Password are required for signup.")
+                    
+                # Double check user existence
+                cursor.execute("SELECT email FROM users WHERE email = %s", (email,))
+                if cursor.fetchone():
+                    cursor.close()
+                    conn.close()
+                    return self.respond_error(400, "An account with this email already exists.")
+                    
+                # Create user
+                COUNTRY_CURRENCY_MAP = {
+                    'US': 'USD', 'IN': 'INR', 'GB': 'GBP', 'DE': 'EUR',
+                    'FR': 'EUR', 'JP': 'JPY', 'CA': 'CAD', 'OTH': 'USD'
+                }
+                currency = COUNTRY_CURRENCY_MAP.get(country, 'USD')
+                password_hash = hash_password(password)
+                
+                cursor.execute(
+                    "INSERT INTO users (email, name, password_hash, budget, currency, country) VALUES (%s, %s, %s, %s, %s, %s)",
+                    (email, name, password_hash, 600.0, currency, country)
+                )
+                
+                # Give custom welcome bonus transaction
+                tx_id = 'tx-' + uuid.uuid4().hex[:12]
+                date_str = datetime.utcnow().strftime('%Y-%m-%d')
+                cursor.execute(
+                    "INSERT INTO transactions (id, user_email, `desc`, amount, category, type, date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (tx_id, email, 'Welcome Bonus Allowance', 100.00, 'income', 'income', date_str)
+                )
+                
+                # Fetch created user info
+                cursor.execute("SELECT email, name, budget, currency, country, tutorial_seen FROM users WHERE email = %s", (email,))
+                user = cursor.fetchone()
+                
+            elif type_val == 'login':
+                cursor.execute("SELECT email, name, budget, currency, country, tutorial_seen FROM users WHERE email = %s", (email,))
+                user = cursor.fetchone()
+                
+            elif type_val == 'reset':
+                new_password = body.get('password', '')
+                if not new_password:
+                    cursor.close()
+                    conn.close()
+                    return self.respond_error(400, "Bad Request: New password is required.")
+                    
+                password_hash = hash_password(new_password)
+                cursor.execute("UPDATE users SET password_hash = %s WHERE email = %s", (password_hash, email))
+                cursor.close()
+                conn.close()
+                return self.respond_json(200, {"success": True, "message": "Password updated successfully."})
+                
+            # Create login session for signup and login
+            token = uuid.uuid4().hex
+            expiry = (datetime.utcnow() + timedelta(days=7)).isoformat()
+            cursor.execute("INSERT INTO sessions (token, email, expires_at) VALUES (%s, %s, %s)", (token, email, expiry))
+            
+            cursor.close()
+            conn.close()
+            
+            user_data = {
+                "email": user['email'],
+                "name": user['name'],
+                "budget": user['budget'],
+                "currency": user['currency'],
+                "country": user['country'],
+                "tutorial_seen": user['tutorial_seen']
+            }
+            return self.respond_json(200, {"success": True, "token": token, "user": user_data})
+
+        # 3. API Route: User Signup
+        elif self.path == '/api/auth/signup':
             name = body.get('name', '').strip()
             email = body.get('email', '').strip().lower()
             password = body.get('password', '')

@@ -1435,3 +1435,23 @@ h1, h2, h3, h4, h5, h6 {
     transform: translateX(0);
   }
 }
+
+/* OTP Code Entry Style Rules */
+#otp-inputs-wrapper {
+  margin: 20px 0;
+}
+
+.otp-digit {
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-primary);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.otp-digit:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 10px rgba(157, 78, 221, 0.4);
+  background: rgba(0, 0, 0, 0.3);
+  outline: none;
+}

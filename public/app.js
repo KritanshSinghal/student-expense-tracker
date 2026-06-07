@@ -18,6 +18,8 @@ CATEGORIES.personal.icon = '🛍️';
 let currentUser = null;
 let categoryChartInstance = null;
 let trendChartInstance = null;
+let pendingOTPData = null;
+let otpTimerInterval = null;
 
 const EXCHANGE_RATES = {
   USD: 1.0,      // US Dollar
@@ -217,6 +219,7 @@ const Auth = {
 const UI = {
   init() {
     this.setupEventListeners();
+    this.setupOTPDigitInputs();
     this.checkAuthentication();
     this.updateDateDisplay();
     this.initTheme();
@@ -235,23 +238,17 @@ const UI = {
     
     // Auth screens toggle
     document.getElementById('auth-switch-link').addEventListener('click', () => {
-      const isLogin = document.getElementById('login-form').style.display !== 'none';
-      if (isLogin) {
-        document.getElementById('login-form').style.display = 'none';
-        document.getElementById('signup-form').style.display = 'block';
-        document.getElementById('auth-title').innerText = 'Create Account';
-        document.getElementById('auth-subtitle').innerText = 'Join ApexBudget to start tracking';
-        document.getElementById('auth-switch-text').innerText = 'Already have an account? ';
-        document.getElementById('auth-switch-link').innerText = 'Sign In';
+      const linkText = document.getElementById('auth-switch-link').innerText;
+      if (linkText === 'Sign Up') {
+        this.switchAuthPanel('signup');
       } else {
-        document.getElementById('login-form').style.display = 'block';
-        document.getElementById('signup-form').style.display = 'none';
-        document.getElementById('auth-title').innerText = 'ApexBudget';
-        document.getElementById('auth-subtitle').innerText = 'Sign in to manage your student finances';
-        document.getElementById('auth-switch-text').innerText = "Don't have an account? ";
-        document.getElementById('auth-switch-link').innerText = 'Sign Up';
+        this.switchAuthPanel('login');
       }
-      document.getElementById('auth-error-box').style.display = 'none';
+    });
+
+    // Forgot password trigger
+    document.getElementById('btn-forgot-password').addEventListener('click', () => {
+      this.switchAuthPanel('forgot');
     });
     
     // Login Submit
@@ -259,16 +256,32 @@ const UI = {
       e.preventDefault();
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
-      const res = await Auth.login(email, password);
       
-      if (res.success) {
-        this.onUserLoggedIn();
-      } else {
-        this.showAuthError(res.message);
+      // Request login OTP
+      try {
+        const res = await fetch(API_BASE + '/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, type: 'login' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          pendingOTPData = { email, password, type: 'login' };
+          
+          if (data.otp_fallback) {
+            console.log("ApexBudget // Local OTP Fallback Code:", data.otp_fallback);
+            alert(`[Local Testing] Verification code: ${data.otp_fallback}`);
+          }
+          
+          this.openOTPModal('login', email);
+        } else {
+          this.showAuthError(data.message || 'Login failed.');
+        }
+      } catch (err) {
+        this.showAuthError('Could not connect to the authentication server.');
       }
     });
 
-    
     // Signup Submit
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -277,22 +290,58 @@ const UI = {
       const password = document.getElementById('signup-password').value;
       const country = document.getElementById('signup-country').value;
       
-      console.log("ApexBudget // Signup initiated for:", email);
-      const res = await Auth.signup(name, email, password, country);
-      
-      if (res.success) {
-        console.log("ApexBudget // Signup successful, logging in...");
-        const loginRes = await Auth.login(email, password);
-        if (loginRes.success) {
-          console.log("ApexBudget // Login successful, user session saved.");
-          this.onUserLoggedIn();
+      // Request signup OTP
+      try {
+        const res = await fetch(API_BASE + '/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, type: 'signup' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          pendingOTPData = { name, email, password, country, type: 'signup' };
+          
+          if (data.otp_fallback) {
+            console.log("ApexBudget // Local OTP Fallback Code:", data.otp_fallback);
+            alert(`[Local Testing] Verification code: ${data.otp_fallback}`);
+          }
+          
+          this.openOTPModal('signup', email);
         } else {
-          console.error("ApexBudget // Login failed after signup:", loginRes.message);
-          this.showAuthError(loginRes.message);
+          this.showAuthError(data.message || 'Signup failed.');
         }
-      } else {
-        console.error("ApexBudget // Signup failed:", res.message);
-        this.showAuthError(res.message);
+      } catch (err) {
+        this.showAuthError('Could not connect to the authentication server.');
+      }
+    });
+
+    // Forgot Password Submit
+    document.getElementById('forgot-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('forgot-email').value.trim();
+      
+      // Request reset OTP
+      try {
+        const res = await fetch(API_BASE + '/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, type: 'reset' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          pendingOTPData = { email, type: 'reset' };
+          
+          if (data.otp_fallback) {
+            console.log("ApexBudget // Local OTP Fallback Code:", data.otp_fallback);
+            alert(`[Local Testing] Verification code: ${data.otp_fallback}`);
+          }
+          
+          this.openOTPModal('reset', email);
+        } else {
+          this.showAuthError(data.message || 'Reset request failed.');
+        }
+      } catch (err) {
+        this.showAuthError('Could not connect to the authentication server.');
       }
     });
     
@@ -351,6 +400,95 @@ const UI = {
       }
     });
     
+    // OTP Cancel
+    document.getElementById('btn-cancel-otp').addEventListener('click', () => {
+      this.closeOTPModal();
+    });
+
+    // OTP Resend
+    document.getElementById('btn-resend-otp').addEventListener('click', async () => {
+      if (!pendingOTPData) return;
+      
+      const { email, password, type } = pendingOTPData;
+      try {
+        const res = await fetch(API_BASE + '/api/auth/otp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, type })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.otp_fallback) {
+            console.log("ApexBudget // Local OTP Fallback Code (Resend):", data.otp_fallback);
+            alert(`[Local Testing] Resent verification code: ${data.otp_fallback}`);
+          }
+          this.startOTPTimer();
+        } else {
+          alert(data.message || 'Resending OTP failed.');
+        }
+      } catch (err) {
+        alert('Network error: Could not resend verification code.');
+      }
+    });
+
+    // OTP Submit Form
+    document.getElementById('otp-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!pendingOTPData) return;
+      
+      // Collect code
+      const digits = Array.from(document.querySelectorAll('.otp-digit')).map(input => input.value).join('');
+      if (digits.length !== 6) {
+        alert("Please enter all 6 digits of the code.");
+        return;
+      }
+      
+      const payload = {
+        email: pendingOTPData.email,
+        code: digits,
+        type: pendingOTPData.type
+      };
+      
+      if (pendingOTPData.type === 'signup') {
+        payload.name = pendingOTPData.name;
+        payload.password = pendingOTPData.password;
+        payload.country = pendingOTPData.country;
+      } else if (pendingOTPData.type === 'reset') {
+        const newPassword = document.getElementById('otp-new-password').value;
+        if (!newPassword || newPassword.length < 6) {
+          alert("Please enter a new password of at least 6 characters.");
+          return;
+        }
+        payload.password = newPassword;
+      }
+      
+      try {
+        const res = await fetch(API_BASE + '/api/auth/otp/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.success) {
+          this.closeOTPModal();
+          
+          if (pendingOTPData.type === 'reset') {
+            this.switchAuthPanel('login');
+            alert("Password reset successfully. Please sign in with your new password.");
+          } else {
+            // Store session and login
+            Auth.saveSession(data.token, data.user);
+            this.onUserLoggedIn();
+          }
+        } else {
+          alert(data.message || 'Verification failed. Please check the code.');
+        }
+      } catch (err) {
+        alert('Network error: Verification failed.');
+      }
+    });
+
     // Logout Button
     document.getElementById('btn-logout').addEventListener('click', () => {
       Auth.logout();
@@ -531,6 +669,116 @@ const UI = {
     });
   },
   
+  setupOTPDigitInputs() {
+    const inputs = document.querySelectorAll('.otp-digit');
+    inputs.forEach((input, index) => {
+      // Advance to next input on digit entry
+      input.addEventListener('input', (e) => {
+        if (input.value.length === 1) {
+          if (index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
+        }
+      });
+      
+      // Go back on backspace
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && input.value.length === 0) {
+          if (index > 0) {
+            inputs[index - 1].focus();
+          }
+        }
+      });
+    });
+  },
+
+  switchAuthPanel(mode) {
+    document.getElementById('login-form').style.display = mode === 'login' ? 'block' : 'none';
+    document.getElementById('signup-form').style.display = mode === 'signup' ? 'block' : 'none';
+    document.getElementById('forgot-form').style.display = mode === 'forgot' ? 'block' : 'none';
+    document.getElementById('auth-error-box').style.display = 'none';
+    
+    if (mode === 'login') {
+      document.getElementById('auth-title').innerText = 'ApexBudget';
+      document.getElementById('auth-subtitle').innerText = 'Sign in to manage your student finances';
+      document.getElementById('auth-switch-text').innerText = "Don't have an account? ";
+      document.getElementById('auth-switch-link').innerText = 'Sign Up';
+    } else if (mode === 'signup') {
+      document.getElementById('auth-title').innerText = 'Create Account';
+      document.getElementById('auth-subtitle').innerText = 'Join ApexBudget to start tracking';
+      document.getElementById('auth-switch-text').innerText = 'Already have an account? ';
+      document.getElementById('auth-switch-link').innerText = 'Sign In';
+    } else if (mode === 'forgot') {
+      document.getElementById('auth-title').innerText = 'Reset Password';
+      document.getElementById('auth-subtitle').innerText = 'Enter your email to request a reset code';
+      document.getElementById('auth-switch-text').innerText = 'Remembered your password? ';
+      document.getElementById('auth-switch-link').innerText = 'Sign In';
+    }
+  },
+
+  openOTPModal(type, email) {
+    const modal = document.getElementById('otp-modal');
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+    
+    // Clear old digit inputs
+    document.querySelectorAll('.otp-digit').forEach(input => input.value = '');
+    document.querySelector('.otp-digit').focus();
+    
+    // Configure header
+    if (type === 'reset') {
+      document.getElementById('otp-title').innerText = "Reset Password Verification";
+      document.getElementById('otp-reset-password-group').style.display = 'block';
+      document.getElementById('otp-new-password').required = true;
+      document.getElementById('otp-new-password').value = '';
+    } else {
+      document.getElementById('otp-title').innerText = "Email Verification";
+      document.getElementById('otp-reset-password-group').style.display = 'none';
+      document.getElementById('otp-new-password').required = false;
+    }
+    
+    document.getElementById('otp-subtitle').innerText = `We sent a 6-digit verification code to ${email}`;
+    
+    this.startOTPTimer();
+  },
+
+  closeOTPModal() {
+    const modal = document.getElementById('otp-modal');
+    modal.classList.remove('active');
+    setTimeout(() => modal.style.display = 'none', 300);
+    
+    pendingOTPData = null;
+    if (otpTimerInterval) {
+      clearInterval(otpTimerInterval);
+      otpTimerInterval = null;
+    }
+  },
+
+  startOTPTimer() {
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+    
+    const cooldownText = document.getElementById('otp-cooldown-text');
+    const resendBtn = document.getElementById('btn-resend-otp');
+    
+    cooldownText.style.display = 'inline';
+    resendBtn.style.display = 'none';
+    
+    let secondsLeft = 60;
+    cooldownText.innerText = `Resend code in ${secondsLeft}s`;
+    
+    otpTimerInterval = setInterval(() => {
+      secondsLeft--;
+      cooldownText.innerText = `Resend code in ${secondsLeft}s`;
+      
+      if (secondsLeft <= 0) {
+        clearInterval(otpTimerInterval);
+        otpTimerInterval = null;
+        cooldownText.style.display = 'none';
+        resendBtn.style.display = 'inline-block';
+      }
+    }, 1000);
+  },
+
   checkAuthentication() {
     if (Auth.loadSession()) {
       this.onUserLoggedIn();
