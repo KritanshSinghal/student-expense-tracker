@@ -296,7 +296,7 @@ const UI = {
       }
     });
     
-    // Google Login (Real SSO simulation popup)
+    // Google Login (Real SSO / OAuth flow popup)
     const btnGoogle = document.getElementById('btn-google-login');
     if (btnGoogle) {
       btnGoogle.addEventListener('click', () => {
@@ -304,11 +304,11 @@ const UI = {
         const h = 550;
         const left = (screen.width / 2) - (w / 2);
         const top = (screen.height / 2) - (h / 2);
-        window.open('oauth-mock.html?provider=google', 'oauth_popup', `width=${w},height=${h},top=${top},left=${left}`);
+        window.open(API_BASE + '/api/auth/google/login', 'oauth_popup', `width=${w},height=${h},top=${top},left=${left}`);
       });
     }
 
-    // GitHub Login (Real SSO simulation popup)
+    // GitHub Login (Real SSO / OAuth flow popup)
     const btnGitHub = document.getElementById('btn-github-login');
     if (btnGitHub) {
       btnGitHub.addEventListener('click', () => {
@@ -316,7 +316,7 @@ const UI = {
         const h = 580;
         const left = (screen.width / 2) - (w / 2);
         const top = (screen.height / 2) - (h / 2);
-        window.open('oauth-mock.html?provider=github', 'oauth_popup', `width=${w},height=${h},top=${top},left=${left}`);
+        window.open(API_BASE + '/api/auth/github/login', 'oauth_popup', `width=${w},height=${h},top=${top},left=${left}`);
       });
     }
 

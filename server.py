@@ -8,6 +8,9 @@ import secrets
 import uuid
 import time
 from datetime import datetime, timedelta
+import urllib.request
+import urllib.parse
+import ssl
 
 PORT = int(os.environ.get('PORT', 8000))
 
@@ -19,7 +22,11 @@ def load_env():
         'DB_USER': 'root',
         'DB_PASSWORD': '',
         'DB_NAME': 'apexbudget_db',
-        'DB_SSL': 'false'
+        'DB_SSL': 'false',
+        'GOOGLE_CLIENT_ID': '',
+        'GOOGLE_CLIENT_SECRET': '',
+        'GITHUB_CLIENT_ID': '',
+        'GITHUB_CLIENT_SECRET': ''
     }
     # Load .env relative to server.py
     env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -46,6 +53,11 @@ DB_USER = ENV['DB_USER']
 DB_PASSWORD = ENV['DB_PASSWORD']
 DB_NAME = ENV['DB_NAME']
 DB_SSL = ENV['DB_SSL'].lower() in ('true', '1', 'yes')
+
+GOOGLE_CLIENT_ID = ENV['GOOGLE_CLIENT_ID']
+GOOGLE_CLIENT_SECRET = ENV['GOOGLE_CLIENT_SECRET']
+GITHUB_CLIENT_ID = ENV['GITHUB_CLIENT_ID']
+GITHUB_CLIENT_SECRET = ENV['GITHUB_CLIENT_SECRET']
 
 # 2. Database Connection Helpers
 def get_db_connection():
@@ -230,8 +242,12 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
         self.respond_json(status, {"success": False, "message": message})
 
     def do_GET(self):
+        parsed_url = urllib.parse.urlparse(self.path)
+        path = parsed_url.path
+        query = urllib.parse.parse_qs(parsed_url.query)
+        
         # 1. API route: get transactions
-        if self.path == '/api/transactions':
+        if path == '/api/transactions':
             user = self.get_auth_user()
             if not user:
                 return self.respond_error(401, "Unauthorized: Invalid or expired session.")
@@ -247,7 +263,7 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
             tx_list = list(rows) if rows else []
             return self.respond_json(200, {"success": True, "transactions": tx_list})
 
-        elif self.path == '/api/auth/users':
+        elif path == '/api/auth/users':
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT email, name FROM users")
@@ -257,6 +273,199 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
             
             user_list = list(rows) if rows else []
             return self.respond_json(200, {"success": True, "users": user_list})
+
+        # --- Real Google & GitHub OAuth Endpoints ---
+        elif path == '/api/auth/google/login':
+            # Check if Client ID is configured
+            if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+                host = self.headers.get('Host', '')
+                proto = 'https' if 'onrender' in host else 'http'
+                redirect_uri = f"{proto}://{host}/api/auth/google/callback"
+                
+                auth_url = (
+                    "https://accounts.google.com/o/oauth2/v2/auth?"
+                    f"response_type=code&client_id={urllib.parse.quote(GOOGLE_CLIENT_ID)}&"
+                    f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
+                    "scope=openid%20profile%20email"
+                )
+                self.send_response(302)
+                self.send_header('Location', auth_url)
+                self.end_headers()
+                return
+            else:
+                # Fallback to simulated OAuth popup page
+                self.send_response(302)
+                self.send_header('Location', '/oauth-mock.html?provider=google')
+                self.end_headers()
+                return
+
+        elif path == '/api/auth/google/callback':
+            code = query.get('code', [None])[0]
+            if not code:
+                return self.respond_error(400, "Auth Code is missing")
+                
+            host = self.headers.get('Host', '')
+            proto = 'https' if 'onrender' in host else 'http'
+            redirect_uri = f"{proto}://{host}/api/auth/google/callback"
+            
+            # Exchange code for access token
+            token_url = "https://oauth2.googleapis.com/token"
+            data = urllib.parse.urlencode({
+                'code': code,
+                'client_id': GOOGLE_CLIENT_ID,
+                'client_secret': GOOGLE_CLIENT_SECRET,
+                'redirect_uri': redirect_uri,
+                'grant_type': 'authorization_code'
+            }).encode('utf-8')
+            
+            try:
+                req = urllib.request.Request(token_url, data=data)
+                with urllib.request.urlopen(req) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    access_token = res_body.get('access_token')
+                    
+                # Fetch user details
+                user_info_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+                req_user = urllib.request.Request(user_info_url)
+                req_user.add_header('Authorization', f"Bearer {access_token}")
+                
+                with urllib.request.urlopen(req_user) as response_user:
+                    profile = json.loads(response_user.read().decode('utf-8'))
+                    email = profile.get('email', '').strip().lower()
+                    name = profile.get('name', '').strip()
+                    
+                if not email:
+                    return self.respond_error(400, "Google did not return an email address")
+                    
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                html = f"""<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    if (window.opener) {{
+      window.opener.postMessage({{
+        type: 'oauth-success',
+        provider: 'google',
+        profile: 'custom',
+        email: '{email}',
+        name: '{name}'
+      }}, '*');
+    }}
+    window.close();
+  </script>
+</body>
+</html>"""
+                self.wfile.write(html.encode('utf-8'))
+                return
+            except Exception as e:
+                return self.respond_error(500, f"Google OAuth exchange failed: {e}")
+
+        elif path == '/api/auth/github/login':
+            # Check if Client ID is configured
+            if GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET:
+                host = self.headers.get('Host', '')
+                proto = 'https' if 'onrender' in host else 'http'
+                redirect_uri = f"{proto}://{host}/api/auth/github/callback"
+                
+                auth_url = (
+                    "https://github.com/login/oauth/authorize?"
+                    f"client_id={urllib.parse.quote(GITHUB_CLIENT_ID)}&"
+                    f"redirect_uri={urllib.parse.quote(redirect_uri)}&"
+                    "scope=read:user%20user:email"
+                )
+                self.send_response(302)
+                self.send_header('Location', auth_url)
+                self.end_headers()
+                return
+            else:
+                self.send_response(302)
+                self.send_header('Location', '/oauth-mock.html?provider=github')
+                self.end_headers()
+                return
+
+        elif path == '/api/auth/github/callback':
+            code = query.get('code', [None])[0]
+            if not code:
+                return self.respond_error(400, "Auth Code is missing")
+                
+            host = self.headers.get('Host', '')
+            proto = 'https' if 'onrender' in host else 'http'
+            redirect_uri = f"{proto}://{host}/api/auth/github/callback"
+            
+            token_url = "https://github.com/login/oauth/access_token"
+            data = urllib.parse.urlencode({
+                'code': code,
+                'client_id': GITHUB_CLIENT_ID,
+                'client_secret': GITHUB_CLIENT_SECRET,
+                'redirect_uri': redirect_uri
+            }).encode('utf-8')
+            
+            try:
+                # Exchange code for access token
+                req = urllib.request.Request(token_url, data=data)
+                req.add_header('Accept', 'application/json')
+                with urllib.request.urlopen(req) as response:
+                    res_body = json.loads(response.read().decode('utf-8'))
+                    access_token = res_body.get('access_token')
+                    
+                # Fetch user details
+                user_info_url = "https://api.github.com/user"
+                req_user = urllib.request.Request(user_info_url)
+                req_user.add_header('Authorization', f"token {access_token}")
+                req_user.add_header('User-Agent', 'ApexBudget-App')
+                
+                with urllib.request.urlopen(req_user) as response_user:
+                    profile = json.loads(response_user.read().decode('utf-8'))
+                    name = profile.get('name') or profile.get('login', '')
+                    name = name.strip()
+                    
+                # Fetch primary email from GitHub emails API
+                emails_url = "https://api.github.com/user/emails"
+                req_emails = urllib.request.Request(emails_url)
+                req_emails.add_header('Authorization', f"token {access_token}")
+                req_emails.add_header('User-Agent', 'ApexBudget-App')
+                
+                email = ''
+                with urllib.request.urlopen(req_emails) as response_emails:
+                    emails_list = json.loads(response_emails.read().decode('utf-8'))
+                    for email_obj in emails_list:
+                        if email_obj.get('primary'):
+                            email = email_obj.get('email', '').strip().lower()
+                            break
+                    if not email and emails_list:
+                        email = emails_list[0].get('email', '').strip().lower()
+                        
+                if not email:
+                    return self.respond_error(400, "GitHub did not return a primary email address")
+                    
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                html = f"""<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    if (window.opener) {{
+      window.opener.postMessage({{
+        type: 'oauth-success',
+        provider: 'github',
+        profile: 'custom',
+        email: '{email}',
+        name: '{name}'
+      }}, '*');
+    }}
+    window.close();
+  </script>
+</body>
+</html>"""
+                self.wfile.write(html.encode('utf-8'))
+                return
+            except Exception as e:
+                return self.respond_error(500, f"GitHub OAuth exchange failed: {e}")
 
         # 2. Static files fallback
         self.serve_static_file()
