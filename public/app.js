@@ -471,9 +471,10 @@ const UI = {
         const data = await res.json();
         
         if (res.ok && data.success) {
+          const flowType = pendingOTPData.type;
           this.closeOTPModal();
           
-          if (pendingOTPData.type === 'reset') {
+          if (flowType === 'reset') {
             this.switchAuthPanel('login');
             alert("Password reset successfully. Please sign in with your new password.");
           } else {
