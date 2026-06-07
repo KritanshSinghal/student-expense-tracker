@@ -588,6 +588,14 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
         self.serve_static_file()
 
     def do_POST(self):
+        try:
+            self._do_POST_internal()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.respond_error(500, f"Internal Server Error: {str(e)}")
+
+    def _do_POST_internal(self):
         # Parse JSON body
         content_length = int(self.headers.get('Content-Length', 0))
         post_data = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else ""
