@@ -485,7 +485,8 @@ const UI = {
           alert(data.message || 'Verification failed. Please check the code.');
         }
       } catch (err) {
-        alert('Network error: Verification failed.');
+        console.error("ApexBudget // Verification exception: ", err);
+        alert(`Verification failed: ${err.name || 'Error'}: ${err.message || err}`);
       }
     });
 
