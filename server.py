@@ -736,13 +736,7 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
                     (email, name, password_hash, 600.0, currency, country)
                 )
                 
-                # Give custom welcome bonus transaction
-                tx_id = 'tx-' + uuid.uuid4().hex[:12]
-                date_str = datetime.utcnow().strftime('%Y-%m-%d')
-                cursor.execute(
-                    "INSERT INTO transactions (id, user_email, `desc`, amount, category, type, date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (tx_id, email, 'Welcome Bonus Allowance', 100.00, 'income', 'income', date_str)
-                )
+
                 
                 # Fetch created user info
                 cursor.execute("SELECT email, name, budget, currency, country, tutorial_seen FROM users WHERE email = %s", (email,))
@@ -892,16 +886,8 @@ class AppRequestHandler(http.server.BaseHTTPRequestHandler):
                     (email, name, 'oauth_bypass_hashed', default_budget, currency, 'US')
                 )
                 
-                # If custom user (welcome bonus)
-                if 'aria.chen' not in email and 'devon.lane' not in email:
-                    tx_id = 'tx-' + uuid.uuid4().hex[:12]
-                    date_str = datetime.utcnow().strftime('%Y-%m-%d')
-                    cursor.execute(
-                        "INSERT INTO transactions (id, user_email, `desc`, amount, category, type, date) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                        (tx_id, email, 'Welcome Bonus Allowance', 100.00, 'income', 'income', date_str)
-                    )
-                else:
-                    # Seed transaction datasets for standard mock logins
+                # Seed transaction datasets for standard mock logins
+                if 'aria.chen' in email or 'devon.lane' in email:
                     seed_txs = []
                     if 'aria.chen' in email:
                         seed_txs = [
