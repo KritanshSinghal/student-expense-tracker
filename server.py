@@ -290,12 +290,12 @@ def email_send_otp(email, code, type_str):
             print(f"Warning: Failed to send OTP via SMTP: {e}")
             
     # 3. Console fallback
-    print(f"\n==========================================")
-    print(f"  APEXBUDGET OTP FALLBACK LOG")
-    print(f"  To: {email}")
-    print(f"  Type: {type_str}")
-    print(f"  OTP Code: {code}")
-    print(f"==========================================\n")
+    print(f"\n==========================================", flush=True)
+    print(f"  APEXBUDGET OTP FALLBACK LOG", flush=True)
+    print(f"  To: {email}", flush=True)
+    print(f"  Type: {type_str}", flush=True)
+    print(f"  OTP Code: {code}", flush=True)
+    print(f"==========================================\n", flush=True)
     return False
 
 # 4. HTTP Server Handler
