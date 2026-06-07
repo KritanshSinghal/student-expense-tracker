@@ -257,25 +257,13 @@ const UI = {
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
       
-      // Request login OTP
+      // Perform direct password authentication
       try {
-        const res = await fetch(API_BASE + '/api/auth/otp/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, type: 'login' })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          pendingOTPData = { email, password, type: 'login' };
-          
-          if (data.otp_fallback) {
-            console.log("ApexBudget // Local OTP Fallback Code:", data.otp_fallback);
-            alert(`[Local Testing] Verification code: ${data.otp_fallback}`);
-          }
-          
-          this.openOTPModal('login', email);
+        const res = await Auth.login(email, password);
+        if (res.success) {
+          this.onUserLoggedIn();
         } else {
-          this.showAuthError(data.message || 'Login failed.');
+          this.showAuthError(res.message || 'Login failed.');
         }
       } catch (err) {
         this.showAuthError('Could not connect to the authentication server.');
