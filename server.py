@@ -240,7 +240,8 @@ def email_send_otp(email, code, type_str):
         url = "https://api.resend.com/emails"
         headers = {
             "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "ApexBudget-App/1.0"
         }
         from_email = SMTP_EMAIL if SMTP_EMAIL else "onboarding@resend.dev"
         payload = json.dumps({
