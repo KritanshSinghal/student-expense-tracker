@@ -1,0 +1,6 @@
+.env
+database.db
+*.pyc
+__pycache__/
+output_test.txt
+*.log

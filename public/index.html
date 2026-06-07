@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://open.er-api.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;">
+  <title>ApexBudget // Modern Student Expense Tracker</title>
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css?v=1.1">
+  <!-- Chart.js and ExcelJS dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- regenerator-runtime polyfill is required for ExcelJS in browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/regenerator-runtime/0.14.1/runtime.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+</head>
+<body>
+
+  <!-- AUTHENTICATION SCREEN -->
+  <div id="auth-screen" class="auth-wrapper">
+    <div class="auth-container glass-panel" style="position: relative;">
+
+      <div class="auth-header">
+        <div class="brand-icon" style="margin: 0 auto;">
+          <i class="fas fa-graduation-cap"></i>
+        </div>
+        <h1 id="auth-title">ApexBudget</h1>
+        <p id="auth-subtitle">Sign in to manage your student finances</p>
+      </div>
+
+      <div id="auth-error-box" class="auth-error">
+        <i class="fas fa-exclamation-circle"></i> <span id="auth-error-msg">Invalid credentials.</span>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Student Email</label>
+          <input type="email" id="login-email" class="form-input" placeholder="you@university.edu" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-input" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 10px;">
+          <i class="fas fa-sign-in-alt"></i> Sign In
+        </button>
+      </form>
+
+      <!-- Signup Form (Hidden initially) -->
+      <form id="signup-form" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" for="signup-name">Full Name</label>
+          <input type="text" id="signup-name" class="form-input" placeholder="Alex Morgan" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-email">Student Email</label>
+          <input type="email" id="signup-email" class="form-input" placeholder="you@university.edu" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="signup-password">Password</label>
+          <input type="password" id="signup-password" class="form-input" placeholder="Min. 6 characters" minlength="6" required>
+        </div>
+        <div class="form-group" style="position: relative;" id="signup-country-group">
+          <label class="form-label" for="signup-country">Country / Region</label>
+          <div class="custom-dropdown-container" id="signup-country-dropdown-container">
+            <div class="custom-dropdown-trigger" id="signup-country-trigger" style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--glass-border); border-radius: 10px; padding: 12px 16px;">
+              <span class="custom-dropdown-label" id="signup-country-active-label" style="font-size: 0.95rem; color: var(--text-primary);">United States (USD)</span>
+              <i class="fas fa-chevron-down dropdown-arrow" style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto; transition: transform 0.2s ease;"></i>
+            </div>
+            <!-- Hidden input for HTML form validation -->
+            <input type="hidden" id="signup-country" value="US" required>
+            <div class="custom-dropdown-options" id="signup-country-dropdown-options">
+              <div class="custom-dropdown-option selected" data-value="US">United States (USD)</div>
+              <div class="custom-dropdown-option" data-value="IN">India (INR)</div>
+              <div class="custom-dropdown-option" data-value="GB">United Kingdom (GBP)</div>
+              <div class="custom-dropdown-option" data-value="DE">Germany (EUR)</div>
+              <div class="custom-dropdown-option" data-value="FR">France (EUR)</div>
+              <div class="custom-dropdown-option" data-value="JP">Japan (JPY)</div>
+              <div class="custom-dropdown-option" data-value="CA">Canada (CAD)</div>
+              <div class="custom-dropdown-option" data-value="OTH">Other (USD default)</div>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-accent" style="width: 100%; justify-content: center; margin-top: 10px;">
+          <i class="fas fa-user-plus"></i> Create Account
+        </button>
+      </form>
+
+      <div class="auth-divider">or continue with</div>
+
+      <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+        <button id="btn-google-login" type="button" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.85rem;">
+          <i class="fab fa-google" style="color: #de4032; margin-right: 8px;"></i> Google
+        </button>
+        <button id="btn-github-login" type="button" class="btn btn-secondary" style="flex: 1; justify-content: center; font-size: 0.85rem;">
+          <i class="fab fa-github" style="color: var(--text-primary); margin-right: 8px;"></i> GitHub
+        </button>
+      </div>
+
+
+      <p style="text-align: center; font-size: 0.85rem; margin-top: 24px; color: var(--text-secondary);">
+        <span id="auth-switch-text">Don't have an account?</span>
+        <a id="auth-switch-link" class="auth-toggle-link">Sign Up</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- MAIN APPLICATION LAYOUT -->
+  <div id="app-screen" class="app-container" style="display: none;">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fas fa-wallet"></i>
+        </div>
+        <h2>ApexBudget</h2>
+      </div>
+
+      <!-- Navigation -->
+      <ul class="nav-menu">
+        <li class="nav-item active" data-page="dashboard">
+          <a href="#"><i class="fas fa-chart-pie"></i> Dashboard</a>
+        </li>
+        <li class="nav-item" data-page="transactions">
+          <a href="#"><i class="fas fa-list-ul"></i> Ledger</a>
+        </li>
+        <li class="nav-item" data-page="analytics">
+          <a href="#"><i class="fas fa-chart-line"></i> Analytics</a>
+        </li>
+      </ul>
+
+      <!-- Theme Switcher -->
+      <div class="theme-toggle" id="theme-toggle-btn">
+        <i class="fas fa-moon" id="theme-indicator-icon"></i>
+        <div class="theme-toggle-label">Color Theme</div>
+        <div class="theme-icons">
+          <span id="theme-dark-icon" class="active-theme"><i class="fas fa-moon"></i></span>
+          <span id="theme-light-icon"><i class="fas fa-sun"></i></span>
+        </div>
+      </div>
+
+      <!-- Custom Currency Selector Dropdown -->
+      <div class="custom-dropdown-container custom-dropup" id="currency-dropdown-container" style="margin-bottom: 20px; position: relative;">
+        <div class="custom-dropdown-trigger" id="currency-dropdown-trigger">
+          <i class="fas fa-coins" style="color: var(--warning); font-size: 1rem;"></i>
+          <span class="custom-dropdown-label" id="active-currency-label" style="font-size: 0.85rem; font-weight: 500; color: var(--text-primary); margin-left: 8px;">USD ($)</span>
+          <i class="fas fa-chevron-down dropdown-arrow" style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto; transition: transform 0.2s ease;"></i>
+        </div>
+        <div class="custom-dropdown-options" id="currency-dropdown-options">
+          <div class="custom-dropdown-option" data-value="USD">USD ($)</div>
+          <div class="custom-dropdown-option" data-value="EUR">EUR (€)</div>
+          <div class="custom-dropdown-option" data-value="GBP">GBP (£)</div>
+          <div class="custom-dropdown-option" data-value="INR">INR (₹)</div>
+          <div class="custom-dropdown-option" data-value="JPY">JPY (¥)</div>
+          <div class="custom-dropdown-option" data-value="CAD">CAD (C$)</div>
+        </div>
+      </div>
+
+      <!-- User Profile Card -->
+      <div class="user-profile-menu">
+        <div class="user-avatar" id="avatar-letters">US</div>
+        <div class="user-info">
+          <span class="user-name" id="profile-name">User Name</span>
+          <span class="user-role">Student Profile</span>
+        </div>
+        <button class="logout-btn" id="btn-open-settings" title="Profile Settings" style="margin-left: auto; margin-right: 6px;">
+          <i class="fas fa-cog"></i>
+        </button>
+        <button class="logout-btn" id="btn-logout" title="Sign Out" style="margin-left: 0;">
+          <i class="fas fa-power-off"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN PAGE WRAPPER -->
+    <main class="main-content">
+      
+      <!-- PAGE HEADER -->
+      <header class="page-header">
+        <div class="page-title">
+          <h1 id="dynamic-title">Dashboard</h1>
+          <p id="header-date">Friday, June 5, 2026</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="btn-add-tx">
+            <i class="fas fa-plus"></i> New Transaction
+          </button>
+        </div>
+      </header>
+
+      <!-- PAGE 1: DASHBOARD -->
+      <section id="page-dashboard" class="app-page active">
+        <!-- Stats cards -->
+        <div class="stats-grid">
+          <div class="glass-panel stat-card">
+            <div class="stat-header">
+              <span>Current Balance</span>
+              <div class="stat-icon"><i class="fas fa-wallet"></i></div>
+            </div>
+            <div class="stat-value" id="val-balance">$0.00</div>
+            <div class="stat-desc">Remaining cash flow</div>
+          </div>
+          <div class="glass-panel stat-card">
+            <div class="stat-header">
+              <span>Total Income</span>
+              <div class="stat-icon"><i class="fas fa-arrow-down-long"></i></div>
+            </div>
+            <div class="stat-value" id="val-income" style="color: var(--success);">$0.00</div>
+            <div class="stat-desc" id="lbl-income-desc">Allowance & Hustles</div>
+          </div>
+          <div class="glass-panel stat-card">
+            <div class="stat-header">
+              <span>Total Spent</span>
+              <div class="stat-icon"><i class="fas fa-arrow-up-long"></i></div>
+            </div>
+            <div class="stat-value" id="val-spent" style="color: var(--danger);">$0.00</div>
+            <div class="stat-desc" id="lbl-spent-desc">This month's expenses</div>
+          </div>
+          <div class="glass-panel stat-card">
+            <div class="stat-header">
+              <span>Savings Rate</span>
+              <div class="stat-icon"><i class="fas fa-piggy-bank"></i></div>
+            </div>
+            <div class="stat-value" id="val-savings">0%</div>
+            <div class="stat-desc" id="lbl-savings-desc">Saved of monthly income</div>
+          </div>
+        </div>
+
+        <!-- Dashboard Charts & Budget Tracker -->
+        <div class="dashboard-grid">
+          <!-- Main Chart -->
+          <div class="glass-panel chart-card">
+            <div class="chart-header">
+              <span class="chart-title">Expenses by Category</span>
+              <span class="stat-desc">Monthly breakdown</span>
+            </div>
+            <div class="chart-container">
+              <canvas id="categoryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Budget Tracker Widget -->
+          <div class="glass-panel budget-widget">
+            <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 4px;">Monthly Budget</h3>
+            <p class="stat-desc">Spending threshold limit</p>
+            <div class="radial-progress" id="budget-progress-radial">
+              <div class="radial-progress-inner">
+                <span class="radial-value" id="budget-spent-pct">0%</span>
+                <span class="radial-pct">exhausted</span>
+              </div>
+            </div>
+            <div class="budget-amount-text" id="budget-status-text">
+              Spent $0.00 of $500.00
+            </div>
+            <button class="edit-budget-btn" id="btn-edit-budget">
+              <i class="fas fa-cog"></i> Adjust Monthly Budget
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Ledger & Student Advice Box -->
+        <div class="insights-grid">
+          <!-- Recent Transactions -->
+          <div class="glass-panel panel-card">
+            <div class="panel-header">
+              <span class="panel-title"><i class="fas fa-history" style="color: var(--primary);"></i> Recent Transactions</span>
+              <button class="btn btn-secondary btn-sm" id="btn-dashboard-view-all">View All</button>
+            </div>
+            <div class="transaction-list" id="dashboard-tx-list">
+              <!-- Rendered dynamically -->
+              <p class="stat-desc" style="text-align: center; padding: 20px;">No transactions found. Click 'New Transaction' to add one!</p>
+            </div>
+          </div>
+
+          <!-- Student Tips & Advice -->
+          <div class="glass-panel panel-card">
+            <div class="panel-header">
+              <span class="panel-title"><i class="fas fa-lightbulb" style="color: var(--warning);"></i> Financial Insights</span>
+              <span class="stat-desc">Smart tips</span>
+            </div>
+            <div class="tips-container" id="dashboard-tips-list">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 2: LEDGER (TRANSACTIONS) -->
+      <section id="page-transactions" class="app-page">
+        <!-- Filtering and Export Controls -->
+        <div class="glass-panel" style="padding: 20px; margin-bottom: 24px;">
+          <div class="ledger-header">
+            <div class="search-wrapper">
+              <i class="fas fa-search"></i>
+              <input type="text" id="tx-search" class="search-input" placeholder="Search by description or category...">
+            </div>
+            <select id="tx-filter-category" class="filter-select">
+              <option value="all">All Categories</option>
+              <option value="food">🍕 Food & Dining</option>
+              <option value="academics">📚 Textbooks & Academics</option>
+              <option value="rent">🏠 Rent & Utilities</option>
+              <option value="transport">🚌 Transport & Commute</option>
+              <option value="entertainment">🎬 Entertainment & Social</option>
+              <option value="income">💼 Side Hustle & Income</option>
+              <option value="personal">🛍️ Personal & Shopping</option>
+              <option value="misc">📦 Miscellaneous</option>
+            </select>
+            <select id="tx-filter-type" class="filter-select">
+              <option value="all">All Types</option>
+              <option value="expense">Expenses Only</option>
+              <option value="income">Income Only</option>
+            </select>
+            <button class="btn btn-accent" id="btn-export-excel">
+              <i class="fas fa-file-excel"></i> Export Excel
+            </button>
+          </div>
+        </div>
+
+        <!-- Transactions Ledger list -->
+        <div class="glass-panel panel-card">
+          <div class="panel-header">
+            <span class="panel-title"><i class="fas fa-list" style="color: var(--primary);"></i> Transaction History</span>
+            <span class="stat-desc" id="tx-count-label">0 transactions found</span>
+          </div>
+          <div class="transaction-list" id="ledger-tx-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3: ANALYTICS -->
+      <section id="page-analytics" class="app-page">
+        <div class="analytics-grid">
+          <!-- Time Trend Chart -->
+          <div class="glass-panel chart-card">
+            <div class="chart-header">
+              <span class="chart-title">Cash Flow Trends</span>
+              <span class="stat-desc">Income vs. Expense over time</span>
+            </div>
+            <div class="chart-container" style="height: 320px;">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Category Spend Ratios -->
+          <div class="glass-panel insights-card">
+            <h3 class="chart-title" style="margin-bottom: 8px;">Budget Allocations</h3>
+            <p class="stat-desc" style="margin-bottom: 16px;">Detailed spending weight per category</p>
+            <div class="category-stats-list" id="analytics-categories-progress">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Financial Status & High-level Advices -->
+        <div class="glass-panel panel-card">
+          <div class="panel-header">
+            <span class="panel-title"><i class="fas fa-graduation-cap" style="color: var(--accent-cyan);"></i> Semester Financial Diagnosis</span>
+            <span class="stat-desc">Based on your activity</span>
+          </div>
+          <div class="tips-container" id="analytics-diagnosis-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ADD / EDIT TRANSACTION MODAL -->
+  <div class="modal-overlay" id="tx-modal">
+    <div class="modal-container glass-panel">
+      <div class="modal-header">
+        <h3 class="modal-title" id="tx-modal-title">New Transaction</h3>
+        <button class="modal-close" id="btn-close-tx-modal">&times;</button>
+      </div>
+
+      <form id="tx-form">
+        <!-- Transaction ID (Hidden field for edits) -->
+        <input type="hidden" id="tx-id">
+
+        <!-- Type Selector -->
+        <div class="type-selector">
+          <button type="button" class="type-btn active" data-type="expense" id="btn-type-expense">Expense</button>
+          <button type="button" class="type-btn" data-type="income" id="btn-type-income">Income</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tx-description">Description / Title</label>
+          <input type="text" id="tx-description" class="form-input" placeholder="e.g. Weekly Groceries" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="tx-amount">Amount ($)</label>
+            <input type="number" id="tx-amount" class="form-input" placeholder="0.00" min="0.01" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="tx-date">Date</label>
+            <input type="date" id="tx-date" class="form-input" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="position: relative;" id="tx-category-group">
+          <label class="form-label" for="tx-category">Category</label>
+          <div class="custom-dropdown-container" id="tx-category-dropdown-container">
+            <div class="custom-dropdown-trigger" id="tx-category-trigger">
+              <span class="custom-dropdown-label" id="tx-category-active-label">🍕 Food & Dining</span>
+              <i class="fas fa-chevron-down dropdown-arrow" style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto; transition: transform 0.2s ease;"></i>
+            </div>
+            <input type="hidden" id="tx-category" value="food" required>
+            <div class="custom-dropdown-options" id="tx-category-dropdown-options">
+              <!-- Options populated in app.js -->
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-tx-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Transaction</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT BUDGET MODAL -->
+  <div class="modal-overlay" id="budget-modal">
+    <div class="modal-container glass-panel">
+      <div class="modal-header">
+        <h3 class="modal-title">Monthly Limit Settings</h3>
+        <button class="modal-close" id="btn-close-budget-modal">&times;</button>
+      </div>
+
+      <form id="budget-form">
+        <div class="form-group">
+          <label class="form-label" for="budget-input">Set Monthly Target Limit ($)</label>
+          <input type="number" id="budget-input" class="form-input" placeholder="e.g. 500" min="10" required>
+        </div>
+        <p class="stat-desc" style="margin-bottom: 20px; text-align: left;">
+          We will warn you when you exceed 80% of this budget. High spending alerts will guide you with saving tips.
+        </p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-budget-modal">Cancel</button>
+          <button type="submit" class="btn btn-accent">Update Budget</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PROFILE SETTINGS MODAL -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-container glass-panel">
+      <div class="modal-header">
+        <h2 class="modal-title">Profile Settings</h2>
+        <button class="modal-close" id="btn-close-settings-modal">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active Account Name</label>
+        <input type="text" id="settings-name" class="form-input" disabled style="opacity: 0.6; cursor: not-allowed; background: rgba(255,255,255,0.03);">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active Account Email</label>
+        <input type="email" id="settings-email" class="form-input" disabled style="opacity: 0.6; cursor: not-allowed; background: rgba(255,255,255,0.03);">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active Region / Currency</label>
+        <input type="text" id="settings-currency-region" class="form-input" disabled style="opacity: 0.6; cursor: not-allowed; background: rgba(255,255,255,0.03);">
+      </div>
+      
+      <!-- Danger Zone: Account Deletion (Relocated here!) -->
+      <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--glass-border);">
+        <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--danger); margin-bottom: 8px;">Danger Zone</h4>
+        <p class="stat-desc" style="margin-bottom: 12px; text-align: left;">
+          Permanently delete your ApexBudget account and all of your transaction ledger records. This action is irreversible.
+        </p>
+        <button type="button" class="btn" id="btn-delete-account" style="background: rgba(255, 77, 109, 0.1); color: var(--danger); border: 1px solid var(--danger); width: 100%; justify-content: center; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255, 77, 109, 0.2)'" onmouseout="this.style.background='rgba(255, 77, 109, 0.1)'">
+          <i class="fas fa-trash-alt"></i> Delete Account
+        </button>
+      </div>
+      <div class="btn-row" style="margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-settings-modal" style="width: 100%; justify-content: center;">Close Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ONBOARDING TUTORIAL MODAL -->
+  <div class="modal-overlay" id="tutorial-modal">
+    <div class="modal-container glass-panel" style="max-width: 550px; padding: 0; overflow: hidden; border-radius: 20px;">
+      <!-- Top Banner Header -->
+      <div style="background: linear-gradient(135deg, var(--primary), #b5179e); padding: 32px 24px; text-align: center; color: #fff; position: relative;">
+        <div class="brand-icon" style="margin: 0 auto 16px auto; background: rgba(255, 255, 255, 0.2); width: 56px; height: 56px; border-radius: 16px; font-size: 1.6rem; display: flex; align-items: center; justify-content: center; box-shadow: none;">
+          <i class="fas fa-graduation-cap"></i>
+        </div>
+        <h2 style="font-size: 1.6rem; font-weight: 800; margin-bottom: 6px;">Welcome to ApexBudget!</h2>
+        <p style="font-size: 0.85rem; opacity: 0.9; font-weight: 500;">Let's take a quick 1-minute tour to set up your wallet.</p>
+        <span id="tutorial-step-indicator" style="position: absolute; top: 16px; right: 16px; font-size: 0.75rem; font-weight: 600; opacity: 0.85; background: rgba(0,0,0,0.25); padding: 4px 10px; border-radius: 20px;">Step 1 of 5</span>
+      </div>
+
+      <!-- Slide Contents -->
+      <div style="padding: 24px 24px 20px 24px;">
+        <div id="tutorial-slides">
+          <!-- Slide 1: Welcome -->
+          <div class="tutorial-slide active" data-step="1">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>🚀</span> Command Center
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+              ApexBudget helps you balance studies and finances. Track your <strong>Current Balance</strong>, <strong>Allowances/Income</strong>, and <strong>Monthly Spent</strong> card values in real-time.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
+              <i class="fas fa-chart-pie" style="font-size: 1.8rem; color: var(--primary);"></i>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                <strong style="color: var(--text-primary);">Key Tip:</strong> Maintain a high <strong>Savings Rate</strong> to automatically build tuition and textbook buffers.
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 2: Budgeting -->
+          <div class="tutorial-slide" data-step="2" style="display: none;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>🎯</span> Target Spending Limit
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+              Set a monthly spending threshold to curb impulse buys. The radial progress bar warns you when you exhaust <strong>80%</strong> of your target, and glows red when exceeded.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
+              <i class="fas fa-cog" style="font-size: 1.8rem; color: var(--warning);"></i>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                <strong style="color: var(--text-primary);">Configurable:</strong> Tap the <strong>"Adjust Monthly Budget"</strong> link on the radial widget to scale limit settings anytime.
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 3: Categories -->
+          <div class="tutorial-slide" data-step="3" style="display: none;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>🍔</span> Smooth Category Selection
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+              Categorize expenses like <strong>Academics</strong>, <strong>Utilities</strong>, or <strong>Commute</strong>. The interactive category selector simplifies classification, while real-time charts summarize ratios.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
+              <i class="fas fa-tags" style="font-size: 1.8rem; color: var(--accent-cyan);"></i>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                <strong style="color: var(--text-primary);">Side Hustles:</strong> Toggle the type selector to "Income" to log peer tutoring or allowance checks directly.
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 4: Ledger & Export -->
+          <div class="tutorial-slide" data-step="4" style="display: none;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>📊</span> Financial Ledger & Excel
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+              Search, filter, edit, or delete transactions in the <strong>Financial Ledger</strong>. Need physical reports? Click <strong>"Export Excel"</strong> to download formatted spreadsheets with formulas.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
+              <i class="fas fa-file-excel" style="font-size: 1.8rem; color: var(--success);"></i>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                <strong style="color: var(--text-primary);">Exchange Rates:</strong> Excel files embed dynamic lookup tables that calculate values based on your chosen currency.
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 5: Multi-Currency -->
+          <div class="tutorial-slide" data-step="5" style="display: none;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>🌐</span> Multi-Currency & Live Rates
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+              ApexBudget fetches live rates for <strong>USD</strong>, <strong>EUR</strong>, <strong>GBP</strong>, <strong>INR</strong>, <strong>JPY</strong>, and <strong>CAD</strong>. Swapping currency converts all charts, limits, and histories instantly.
+            </p>
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
+              <i class="fas fa-check-circle" style="font-size: 1.8rem; color: var(--accent-cyan);"></i>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                <strong style="color: var(--text-primary);">All Done!</strong> You're set to master your college finance journey. Tap <strong>"Get Started"</strong> to enter.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Control Row -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 24px; border-top: 1px solid var(--glass-border); padding-top: 16px;">
+          <!-- Progress dots -->
+          <div style="display: flex; gap: 6px;" id="tutorial-dots">
+            <span class="dot active"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-skip-tutorial" style="padding: 8px 16px;">Skip Tour</button>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-next-tutorial" style="min-width: 100px; justify-content: center; padding: 8px 16px;">Next <i class="fas fa-arrow-right" style="font-size: 0.75rem;"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main JavaScript File -->
+  <script src="app.js?v=1.1"></script>
+</body>
+</html>

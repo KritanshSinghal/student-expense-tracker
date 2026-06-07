@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In // OAuth Authorization</title>
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --google-blue: #1a73e8;
+      --google-blue-hover: #1557b0;
+      --github-bg: #181c22;
+      --github-btn: #2da44e;
+      --github-btn-hover: #2c974b;
+      --text-dark: #202124;
+      --text-muted: #5f6368;
+      --border-color: #dadce0;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: #fff;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 450px;
+      padding: 40px 40px;
+      text-align: center;
+    }
+
+    /* GOOGLE VIEW */
+    .google-logo {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 400;
+      margin-bottom: 8px;
+      color: #202124;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-bottom: 30px;
+    }
+
+    .account-list {
+      text-align: left;
+      margin-bottom: 30px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .account-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .account-item:last-child {
+      border-bottom: none;
+    }
+
+    .account-item:hover {
+      background: #f8f9fa;
+    }
+
+    .avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--google-blue);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 500;
+      margin-right: 12px;
+      font-size: 0.85rem;
+    }
+
+    .account-details {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .account-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #3c4043;
+    }
+
+    .account-email {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* MATERIAL INPUT FIELDS */
+    .input-group {
+      position: relative;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 16px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group label {
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      pointer-events: none;
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+      font-size: 1rem;
+      background: #fff;
+      padding: 0 4px;
+    }
+
+    .input-group input:focus + label,
+    .input-group input:not(:placeholder-shown) + label {
+      top: -8px;
+      left: 10px;
+      font-size: 0.75rem;
+      color: var(--google-blue);
+    }
+
+    .input-group input:focus {
+      border-color: var(--google-blue);
+      border-width: 2px;
+      padding: 15px; /* offset for 2px border */
+    }
+
+    .btn-google-next {
+      background: var(--google-blue);
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      float: right;
+      transition: background 0.15s;
+    }
+
+    .btn-google-next:hover {
+      background: var(--google-blue-hover);
+    }
+
+    .btn-google-back {
+      background: transparent;
+      color: var(--google-blue);
+      border: none;
+      padding: 12px 16px;
+      font-weight: 500;
+      font-size: 0.9rem;
+      cursor: pointer;
+      float: left;
+      transition: background 0.15s;
+      border-radius: 4px;
+    }
+
+    .btn-google-back:hover {
+      background: rgba(26, 115, 232, 0.05);
+    }
+
+    /* GITHUB VIEW */
+    body.github-theme {
+      background: #0d1117;
+      color: #c9d1d9;
+    }
+
+    body.github-theme .card {
+      background: #161b22;
+      border-color: #30363d;
+    }
+
+    body.github-theme h1 {
+      color: #f0f6fc;
+    }
+
+    body.github-theme .subtitle {
+      color: #8b949e;
+    }
+
+    .github-logo {
+      font-size: 3rem;
+      color: #f0f6fc;
+      margin-bottom: 20px;
+    }
+
+    .oauth-scopes {
+      background: #21262d;
+      border-radius: 6px;
+      padding: 16px;
+      text-align: left;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      margin-bottom: 24px;
+      border: 1px solid #30363d;
+    }
+
+    body.github-theme .oauth-scopes {
+      background: #0d1117;
+    }
+
+    .scope-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .scope-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .scope-item i {
+      color: #58a6ff;
+      margin-top: 3px;
+    }
+
+    .btn-github {
+      background: var(--github-btn);
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    .btn-github:hover {
+      background: var(--github-btn-hover);
+    }
+
+    /* SPINNER LOADING SCREEN */
+    .loader-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 0;
+    }
+
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.08);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border-left-color: var(--google-blue);
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 24px;
+    }
+
+    body.github-theme .spinner {
+      border-color: rgba(255, 255, 255, 0.08);
+      border-left-color: var(--github-btn);
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    body.github-theme .loading-text {
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card" id="oauth-card">
+    <!-- GOOGLE CHOOSE ACCOUNT VIEW -->
+    <div id="google-view">
+      <svg class="google-logo" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+      </svg>
+      <h1>Choose an account</h1>
+      <p class="subtitle">to continue to <strong>ApexBudget</strong></p>
+      
+      <div class="account-list" id="google-account-list">
+        <!-- Browser Profile Scan Loader -->
+        <div id="browser-profile-scanning" style="display: flex; align-items: center; padding: 18px; color: var(--text-muted); font-size: 0.85rem; gap: 12px; background: #fafafa; justify-content: center;">
+          <div class="mini-spinner" style="border: 2px solid rgba(0, 0, 0, 0.08); width: 16px; height: 16px; border-radius: 50%; border-left-color: var(--google-blue); animation: spin 0.8s linear infinite;"></div>
+          <span>Connecting to Google Accounts...</span>
+        </div>
+      </div>
+      
+      <div style="font-size: 0.8rem; color: var(--text-muted); text-align: left; line-height: 1.4;">
+        Secure simulated sandbox. Your credentials are processed entirely client-side.
+      </div>
+    </div>
+
+    <!-- GOOGLE ENTER CUSTOM EMAIL VIEW -->
+    <div id="google-email-view" style="display: none;">
+      <svg class="google-logo" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+      </svg>
+      <h1>Sign in</h1>
+      <p class="subtitle" style="margin-bottom: 24px;">Use your Google Account</p>
+
+      <form id="google-email-form">
+        <div class="input-group">
+          <input type="email" id="custom-email" required placeholder=" ">
+          <label for="custom-email">Email (must be @gmail.com)</label>
+        </div>
+        <div style="margin-top: 36px; overflow: hidden; width: 100%;">
+          <button type="button" class="btn-google-back" id="btn-email-back">Back</button>
+          <button type="submit" class="btn-google-next">Next</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- GOOGLE ENTER CUSTOM NAME VIEW -->
+    <div id="google-name-view" style="display: none;">
+      <svg class="google-logo" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+      </svg>
+      <h1>Welcome</h1>
+      <p class="subtitle" id="selected-email-subtitle" style="margin-bottom: 24px;">user@gmail.com</p>
+
+      <form id="google-name-form">
+        <div class="input-group">
+          <input type="text" id="custom-name" required placeholder=" " minlength="2">
+          <label for="custom-name">Enter your full name</label>
+        </div>
+        <div style="margin-top: 36px; overflow: hidden; width: 100%;">
+          <button type="button" class="btn-google-back" id="btn-name-back">Back</button>
+          <button type="submit" class="btn-google-next">Next</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- GITHUB PROVIDER INTERFACE -->
+    <div id="github-view" style="display: none;">
+      <div class="github-logo">
+        <i class="fab fa-github"></i>
+      </div>
+      <h1>Authorize ApexBudget</h1>
+      <p class="subtitle">ApexBudget wants to access your GitHub student status</p>
+      
+      <div class="oauth-scopes">
+        <div class="scope-item">
+          <i class="fas fa-user-check"></i>
+          <div>
+            <strong>Personal User Details</strong>
+            <p style="color: #8b949e; font-size: 0.75rem; margin-top: 2px;">Read profile details and student verification status</p>
+          </div>
+        </div>
+        <div class="scope-item" style="margin-top: 12px;">
+          <i class="fas fa-envelope"></i>
+          <div>
+            <strong>Email address</strong>
+            <p style="color: #8b949e; font-size: 0.75rem; margin-top: 2px;">Read your primary GitHub email (devon.lane@github.student)</p>
+          </div>
+        </div>
+      </div>
+      
+      <button class="btn-github" id="btn-github-auth">
+        Authorize Devon Lane
+      </button>
+      
+      <p style="font-size: 0.75rem; color: #8b949e; margin-top: 16px;">
+        Redirecting will return you to http://localhost:8000
+      </p>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div class="loader-container" id="loader-view">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loader-text">Signing in...</div>
+    </div>
+  </div>
+
+  <script>
+    // Get query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const provider = urlParams.get('provider') || 'google';
+
+    const googleView = document.getElementById('google-view');
+    const googleEmailView = document.getElementById('google-email-view');
+    const googleNameView = document.getElementById('google-name-view');
+    const githubView = document.getElementById('github-view');
+    const loaderView = document.getElementById('loader-view');
+    const loaderText = document.getElementById('loader-text');
+
+    let customEmailVal = '';
+    let customNameVal = '';
+
+    if (provider === 'github') {
+      document.body.classList.add('github-theme');
+      googleView.style.display = 'none';
+      githubView.style.display = 'block';
+    }
+
+    function triggerSuccess(profileCode, customEmail = null, customName = null) {
+      // Hide all panels
+      googleView.style.display = 'none';
+      googleEmailView.style.display = 'none';
+      googleNameView.style.display = 'none';
+      githubView.style.display = 'none';
+      loaderView.style.display = 'flex';
+      
+      if (provider === 'github') {
+        loaderText.innerText = 'Authorizing Devon Lane...';
+      } else {
+        loaderText.innerText = 'Logging in with Google...';
+      }
+
+      // Simulate network verification lag (1.5s)
+      setTimeout(() => {
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'oauth-success',
+            provider: provider,
+            profile: profileCode,
+            email: customEmail,
+            name: customName
+          }, '*');
+        }
+        window.close();
+      }, 1500);
+    }
+
+    // Render account list dynamically
+    if (provider === 'google') {
+      const listEl = document.getElementById('google-account-list');
+      const scanningEl = document.getElementById('browser-profile-scanning');
+      
+      // Build options array
+      const options = [];
+      
+      // 1. Add Aria Chen
+      options.push({
+        id: 'google-aria',
+        email: 'aria.chen@google.student',
+        name: 'Aria Chen',
+        avatar: 'A',
+        bg: '#ea4335',
+        isSynced: false
+      });
+
+      const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8000' : '';
+      async function loadDbUsers() {
+        try {
+          const res = await fetch(API_BASE + '/api/auth/users');
+          const data = await res.json();
+          if (data.success && data.users) {
+            data.users.forEach(u => {
+              if (u.email !== 'aria.chen@google.student') {
+                options.push({
+                  id: 'google-db-' + btoa(u.email).replace(/=/g, ''),
+                  email: u.email,
+                  name: u.name || u.email.split('@')[0],
+                  avatar: (u.name || u.email)[0].toUpperCase(),
+                  bg: '#34a853',
+                  isSynced: false
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Failed to load registered users from database:", e);
+        }
+      }
+
+      // We will render these after the simulated scan (1s)
+      setTimeout(async () => {
+        await loadDbUsers();
+        if (scanningEl) scanningEl.style.display = 'none';
+        
+        options.forEach(opt => {
+          const item = document.createElement('div');
+          item.className = 'account-item';
+          item.id = opt.id;
+          
+          const badgeHtml = opt.isSynced 
+            ? `<span style="font-size: 0.65rem; color: var(--google-blue); background: #e8f0fe; border-radius: 4px; padding: 2px 6px; font-weight: 600;">Synced</span>` 
+            : '';
+            
+          item.innerHTML = `
+            <div class="avatar" style="background: ${opt.bg};">${opt.avatar}</div>
+            <div class="account-details">
+              <span class="account-name" style="display: flex; align-items: center; gap: 8px;">
+                ${opt.name}
+                ${badgeHtml}
+              </span>
+              <span class="account-email">${opt.email}</span>
+            </div>
+          `;
+          
+          item.addEventListener('click', () => {
+            if (opt.email === 'aria.chen@google.student') {
+              triggerSuccess('aria');
+            } else {
+              triggerSuccess('custom', opt.email, opt.name);
+            }
+          });
+          
+          listEl.appendChild(item);
+        });
+        
+        // Add "Use another account" button at the bottom of the list
+        const customItem = document.createElement('div');
+        customItem.className = 'account-item';
+        customItem.id = 'google-custom-trigger';
+        customItem.innerHTML = `
+          <div class="avatar" style="background: #f1f3f4; color: var(--text-muted); border: 1px dashed var(--border-color);"><i class="fas fa-user-plus" style="font-size: 0.75rem;"></i></div>
+          <div class="account-details">
+            <span class="account-name" style="color: var(--google-blue); font-weight: 600;">Use another account</span>
+          </div>
+        `;
+        
+        customItem.addEventListener('click', () => {
+          googleView.style.display = 'none';
+          googleEmailView.style.display = 'block';
+          document.getElementById('custom-email').focus();
+        });
+        
+        listEl.appendChild(customItem);
+      }, 1000);
+    }
+
+    // Custom Email form submit
+    document.getElementById('google-email-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const emailInput = document.getElementById('custom-email').value.trim();
+      
+      if (!emailInput.endsWith('@gmail.com')) {
+        alert('Please enter a valid Gmail address ending in @gmail.com');
+        return;
+      }
+      
+      customEmailVal = emailInput;
+      document.getElementById('selected-email-subtitle').innerText = customEmailVal;
+      
+      googleEmailView.style.display = 'none';
+      googleNameView.style.display = 'block';
+      document.getElementById('custom-name').focus();
+    });
+
+    // Custom Name form submit
+    document.getElementById('google-name-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      customNameVal = document.getElementById('custom-name').value.trim();
+      triggerSuccess('custom', customEmailVal, customNameVal);
+    });
+
+    // Navigation Back Buttons
+    document.getElementById('btn-email-back').addEventListener('click', () => {
+      googleEmailView.style.display = 'none';
+      googleView.style.display = 'block';
+    });
+
+    document.getElementById('btn-name-back').addEventListener('click', () => {
+      googleNameView.style.display = 'none';
+      googleEmailView.style.display = 'block';
+    });
+
+    // GitHub Click
+    document.getElementById('btn-github-auth').addEventListener('click', () => triggerSuccess('devon'));
+  </script>
+</body>
+</html>
